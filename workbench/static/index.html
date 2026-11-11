@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>有声书补录选段工作台</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header>
+  <h1>有声书补录选段工作台</h1>
+  <div class="toolbar">
+    <select id="projectSelect"></select>
+    <button id="newProjectBtn">新建演示工程</button>
+    <button id="newDemoBtn">在本工程新建演示章节</button>
+    <span id="projectInfo" class="hint"></span>
+  </div>
+</header>
+
+<main>
+  <section class="card">
+    <div class="card-head">
+      <h2>章节波形 · 选段</h2>
+      <span id="timelineInfo" class="hint"></span>
+    </div>
+    <canvas id="waveCanvas" height="150"></canvas>
+    <div class="row">
+      <span id="selectionInfo" class="hint">在波形上拖动，标出一句话的范围</span>
+      <input id="selectionLabel" value="补录句" size="10" title="选段标签">
+      <button id="markBtn">标记选段</button>
+      <button id="playChapterBtn">播放当前版本</button>
+      <audio id="chapterAudio" controls></audio>
+    </div>
+    <div id="selectionList" class="chips"></div>
+    <p class="hint">选段记录在它所基于的版本时间线上；插入并后移后，时间线会变长。</p>
+  </section>
+
+  <section class="card">
+    <div class="card-head">
+      <h2>录制候选</h2>
+      <span id="recState" class="hint"></span>
+    </div>
+    <div class="row">
+      <button id="recordBtn">开始录制</button>
+      <button id="stopBtn" disabled>停止并完成</button>
+      <button id="interruptBtn" disabled>模拟中断（不完成）</button>
+      <button id="simulateCutBtn" title="模拟候选未写完：截断 PCM 后仍声明完整">模拟未写完提交</button>
+    </div>
+    <p class="hint">时长按服务端实际收到的采样数计时。设备上报的起始时刻仅单独保存，不参与对齐；前导静音原样保留，不会被自动裁掉。</p>
+    <div id="candidateList" class="list"></div>
+  </section>
+
+  <section class="card">
+    <div class="card-head">
+      <h2>试听与采用</h2>
+      <span class="hint">A/B 并排试听选段前后的真实语境</span>
+    </div>
+    <div class="row wrap">
+      <label>候选 <select id="takeSelect"></select></label>
+      <label>插入方式
+        <select id="modeSelect">
+          <option value="insert_shift">插入后移后续内容（总长改变）</option>
+          <option value="keep_duration">保持原时长（不足处用真实底噪填充）</option>
+        </select>
+      </label>
+      <label>淡入 ms <input id="fadeIn" type="number" value="20" min="0" step="1"></label>
+      <label>淡出 ms <input id="fadeOut" type="number" value="20" min="0" step="1"></label>
+      <label>修剪头 ms <input id="trimStart" type="number" value="0" min="0" step="1"></label>
+      <label>修剪尾 ms <input id="trimEnd" type="number" value="0" min="0" step="1"></label>
+    </div>
+    <div class="ab">
+      <div class="ab-col">
+        <h3>A · 原语境</h3>
+        <button id="previewOrig">试听原语境</button>
+        <audio id="audioOrig" controls></audio>
+        <div id="reportOrig" class="report"></div>
+      </div>
+      <div class="ab-col">
+        <h3>B · 候选效果</h3>
+        <button id="previewTake">试听候选效果</button>
+        <audio id="audioTake" controls></audio>
+        <div id="reportTake" class="report"></div>
+      </div>
+    </div>
+    <div class="row">
+      <button id="adoptBtn" class="primary">采用候选，生成新朗读版本</button>
+      <span id="adoptMsg" class="hint"></span>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="card-head">
+      <h2>版本、撤销与导出</h2>
+      <div>
+        <button id="undoBtn">撤销</button>
+        <button id="redoBtn">重做</button>
+        <button id="renderBtn" class="primary">导出当前版本</button>
+      </div>
+    </div>
+    <div id="versionList" class="list"></div>
+    <h3 class="sub">导出任务</h3>
+    <div id="jobList" class="list"></div>
+    <p class="hint">导出使用提交时刻的版本快照；导出中改选会标记“过期”。只有已完成的录次能进入正式渲染，渲染前会重新校验字节。</p>
+  </section>
+
+  <section class="card">
+    <div class="card-head">
+      <h2>章节源与环境底噪</h2>
+      <span id="roomtoneInfo" class="hint"></span>
+    </div>
+    <div class="row wrap">
+      <label>替换章节源 WAV <input type="file" id="chapterFile" accept=".wav,audio/wav"></label>
+      <label>上传真实底噪 WAV <input type="file" id="roomtoneFile" accept=".wav,audio/wav"></label>
+      <span id="uploadMsg" class="hint"></span>
+    </div>
+    <p class="hint">接缝与填充只使用你提供的真实录音底噪。底噪不足时系统会提示并拒绝渲染，绝不合成虚假的“原始录音”。</p>
+  </section>
+</main>
+
+<script src="/static/app.js"></script>
+</body>
+</html>

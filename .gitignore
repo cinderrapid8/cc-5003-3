@@ -1,4 +1,5 @@
 # solo-manager GitHub sync ignores
+data/
 node_modules/
 vendor/
 dist/
