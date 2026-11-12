@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>有声书补录选段工作台</title>
+<style>
+  :root { --bg:#171a21; --panel:#20242e; --line:#2e3441; --fg:#e6e9ef;
+          --muted:#9aa3b2; --accent:#5aa2ff; --warn:#ffb454; --ok:#7fd08a; --err:#ff7676; }
+  * { box-sizing: border-box; }
+  body { margin:0; font:14px/1.5 -apple-system,"PingFang SC","Microsoft YaHei",sans-serif;
+         background:var(--bg); color:var(--fg); }
+  header { padding:14px 20px; border-bottom:1px solid var(--line); display:flex;
+           align-items:center; gap:14px; flex-wrap:wrap; }
+  header h1 { font-size:16px; margin:0; }
+  main { padding:18px 20px; max-width:1180px; margin:0 auto; display:grid; gap:16px; }
+  .panel { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:14px; }
+  .panel h2 { font-size:13px; margin:0 0 10px; color:var(--muted);
+              text-transform:uppercase; letter-spacing:.06em; }
+  row { display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+  button, select, input { font:inherit; }
+  button { background:var(--accent); color:#0c1320; border:0; border-radius:7px;
+           padding:7px 14px; cursor:pointer; font-weight:600; }
+  button.secondary { background:#2c333f; color:var(--fg); }
+  button.danger { background:#3a2a2e; color:var(--err); }
+  button:disabled { opacity:.45; cursor:not-allowed; }
+  input[type=text], input[type=number], select { background:#14171d; color:var(--fg);
+           border:1px solid var(--line); border-radius:7px; padding:6px 9px; }
+  canvas { width:100%; height:150px; background:#101319; border-radius:8px; display:block;
+           cursor:crosshair; }
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  th,td { text-align:left; padding:6px 8px; border-bottom:1px solid var(--line); }
+  th { color:var(--muted); font-weight:600; }
+  .muted { color:var(--muted); }
+  .tag { display:inline-block; padding:1px 8px; border-radius:999px; font-size:12px; }
+  .tag.complete { background:#1e3a25; color:var(--ok); }
+  .tag.interrupted, .tag.abandoned, .tag.recording { background:#3a2e1e; color:var(--warn); }
+  .tag.shift { background:#1d2d44; color:var(--accent); }
+  .tag.keep_duration { background:#332a44; color:#c9a7ff; }
+  .ab-grid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; }
+  .ab-cell { background:#14171d; border:1px solid var(--line); border-radius:8px; padding:10px; }
+  .ab-cell h3 { margin:0 0 6px; font-size:12px; color:var(--muted); }
+  audio { width:100%; height:34px; }
+  .msg { padding:9px 12px; border-radius:8px; margin-top:8px; font-size:13px; }
+  .msg.err { background:#3a2326; color:var(--err); }
+  .msg.ok { background:#1e3324; color:var(--ok); }
+  .msg.warn { background:#3a2f1c; color:var(--warn); }
+  .cue { font-family:ui-monospace,monospace; font-size:12px; color:var(--muted); }
+  label.inline { display:flex; align-items:center; gap:6px; }
+  .hint { color:var(--muted); font-size:12px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>有声书补录选段工作台</h1>
+  <span class="hint">计时以实际采集帧数为准 · 设备时钟单独保存 · 禁止拉伸</span>
+  <span style="flex:1"></span>
+  <span id="project-name" class="muted"></span>
+</header>
+<main>
+  <section class="panel">
+    <h2>1. 工程与章节</h2>
+    <row>
+      <input type="text" id="new-name" placeholder="工程名称" value="第一章 补录">
+      <input type="file" id="chapter-file" accept=".wav,audio/wav">
+      <button id="btn-create">打开/创建工程</button>
+      <span class="hint">仅支持 16bit 单声道 PCM WAV</span>
+    </row>
+    <div id="project-meta" class="hint" style="margin-top:8px"></div>
+  </section>
+
+  <section class="panel" id="mark-panel" hidden>
+    <h2>2. 章节波形与句子标记（在波形上拖拽选择）</h2>
+    <canvas id="wave" width="1120" height="150"></canvas>
+    <row style="margin-top:8px">
+      <input type="text" id="mark-label" placeholder="句子口令标记，如 口令-阿尔法">
+      <button id="btn-mark" class="secondary">在此范围建标记</button>
+      <span id="mark-range" class="hint"></span>
+    </row>
+    <table style="margin-top:10px">
+      <thead><tr><th>口令</th><th>范围(帧)</th><th>时长</th><th>当前选段</th><th>模式</th><th></th></tr></thead>
+      <tbody id="marks-body"></tbody>
+    </table>
+  </section>
+
+  <section class="panel" id="take-panel" hidden>
+    <h2>3. 多次录制（同一标记可录多条候选）</h2>
+    <row>
+      <button id="btn-rec">● 开始录音</button>
+      <button id="btn-stop" disabled>■ 完成</button>
+      <button id="btn-interrupt" class="danger" disabled>中断（模拟断线）</button>
+      <span id="rec-state" class="hint"></span>
+    </row>
+    <p class="hint">时长来自实际 PCM 采样帧数；浏览器报告的起始时刻与首帧偏移只作元数据，不参与对齐。
+      前导静音不会被自动裁掉，必须在下方显式设置 trim。</p>
+    <table style="margin-top:8px">
+      <thead><tr><th>录次</th><th>状态</th><th>实际帧数</th><th>时长(ms)</th>
+        <th>设备起始时刻</th><th>首帧偏移(ms)</th><th>操作</th></tr></thead>
+      <tbody id="takes-body"></tbody>
+    </table>
+
+    <h2 style="margin-top:16px">候选（仅完成录次可生成）与前后语境并排试听</h2>
+    <row>
+      <label class="inline">trim 起 <input type="number" id="trim-start" value="0" style="width:90px"></label>
+      <label class="inline">trim 止 <input type="number" id="trim-end" style="width:90px"></label>
+      <button id="btn-candidate" class="secondary">用所选录次生成候选</button>
+    </row>
+    <div class="ab-grid" style="margin-top:10px">
+      <div class="ab-cell"><h3>前文语境（标记前 0.5s）</h3><audio id="ab-before" controls></audio></div>
+      <div class="ab-cell"><h3>候选试听</h3><audio id="ab-candidate" controls></audio></div>
+      <div class="ab-cell"><h3>后文语境（标记后 0.5s）</h3><audio id="ab-after" controls></audio></div>
+    </div>
+    <table style="margin-top:10px">
+      <thead><tr><th>候选</th><th>来源录次</th><th>trim</th><th>帧数</th><th>试听</th><th></th></tr></thead>
+      <tbody id="cands-body"></tbody>
+    </table>
+  </section>
+
+  <section class="panel" id="select-panel" hidden>
+    <h2>4. 采用与拼接方式（必须显式选择，不默认拉伸）</h2>
+    <row>
+      <label class="inline">候选
+        <select id="sel-candidate"></select></label>
+      <label class="inline">方式
+        <select id="sel-mode">
+          <option value="shift">shift：插入并移动后文（长度改变）</option>
+          <option value="keep_duration">keep_duration：保持原时长（短于原段需真实底噪填充）</option>
+        </select></label>
+      <label class="inline">接缝淡化(ms) <input type="number" id="sel-fade" value="8" style="width:80px"></label>
+      <button id="btn-save-selection">保存采用关系</button>
+    </row>
+    <p class="hint">候选长于标记范围时，keep_duration 会被服务端拒绝；请改用 shift 或重新 trim。</p>
+  </section>
+
+  <section class="panel" id="noise-panel" hidden>
+    <h2>5. 真实环境底噪（keep_duration 填充用，不合成假底噪）</h2>
+    <row>
+      <input type="file" id="noise-file" accept=".wav,audio/wav">
+      <button id="btn-noise" class="secondary">上传底噪片段</button>
+      <span id="noise-state" class="hint"></span>
+    </row>
+  </section>
+
+  <section class="panel" id="render-panel" hidden>
+    <h2>6. 导出带口令标记的合成章节</h2>
+    <row>
+      <button id="btn-prepare">准备导出（快照当前采用关系）</button>
+      <button id="btn-commit" disabled>提交正式渲染</button>
+      <span class="hint">准备后若改选，提交将被拒绝（SELECTION_CHANGED_DURING_EXPORT）</span>
+    </row>
+    <div id="render-msg"></div>
+    <table style="margin-top:10px">
+      <thead><tr><th>版本</th><th>帧数</th><th>相对原章节</th><th>接缝口令 cue</th><th>下载</th></tr></thead>
+      <tbody id="versions-body"></tbody>
+    </table>
+  </section>
+</main>
+<script src="/app.js"></script>
+</body>
+</html>

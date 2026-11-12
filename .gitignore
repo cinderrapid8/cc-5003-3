@@ -1,5 +1,4 @@
 # solo-manager GitHub sync ignores
-data/
 node_modules/
 vendor/
 dist/
@@ -24,3 +23,6 @@ __pycache__/
 *.log
 .env
 .env.*
+
+# audiobook workbench runtime data
+/data/
